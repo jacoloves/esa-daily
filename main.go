@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"time"
 
 	"github.com/go-resty/resty/v2"
 	"github.com/joho/godotenv"
@@ -40,6 +41,65 @@ func getPostByFullName(team, token, fullName string) (*EsaResponse, error) {
 	return resp.Result().(*EsaResponse), nil
 }
 
+func updatePost(team, token string, number int, name, exisitingBody, newEntry string) error {
+	client := resty.New()
+
+	updatedBody := exisitingBody + "\n" + newEntry
+
+	reqBody := map[string]interface{}{
+		"post": map[string]interface{}{
+			"name":    name,
+			"body_md": updatedBody,
+			"wip":     true,
+		},
+	}
+
+	resp, err := client.R().
+		SetHeader("Authorization", "Bearer "+token).
+		SetHeader("Congent-Type", "application/json").
+		SetBody(reqBody).
+		Put(fmt.Sprintf("https://api.esa.io/v1/teams/%s/posts/%d", team, number))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		return fmt.Errorf("Article update failed", resp.Status())
+	}
+
+	fmt.Println("Added to the article. ✅")
+	return nil
+}
+
+func creaatePostFromTemplate(team, token, category, name, templateFullName string) error {
+	client := resty.New()
+
+	reqBody := map[string]interface{}{
+		"post": map[string]interface{}{
+			"name":                    name,
+			"category":                category,
+			"wip":                     true,
+			"template_post_full_name": templateFullName,
+		},
+	}
+
+	resp, err := client.R().
+		SetHeader("Authorization", "Bearer "+token).
+		SetHeader("Content-Type", "application/json").
+		SetBody(reqBody).
+		Post(fmt.Sprintf("https://api.esa.io/v1/teams/%s/posts", team))
+	if err != nil {
+		return err
+	}
+
+	if resp.IsError() {
+		return fmt.Errorf("Failed to create article: %s", resp.Status())
+	}
+
+	fmt.Println("Created an article from a template. ✅")
+	return nil
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -53,20 +113,33 @@ func main() {
 		log.Fatal("API token or team name has not been set.")
 	}
 
-	fullName := "dairy/25/07/06/dairy"
+	fullName := "dairy/25/07/12/dairy"
 
 	postResp, err := getPostByFullName(team, token, fullName)
 	if err != nil {
 		log.Fatalf("Failed to retrieve article: %v", err)
 	}
 
-	if len(postResp.Posts) == 0 {
-		fmt.Println("No articles found")
-	} else {
+	now := time.Now().Format("15:04")
+	message := "I will wirte some Go code"
+	newEntry := fmt.Sprintf("%s %s", now, message)
+
+	if len(postResp.Posts) > 0 {
 		post := postResp.Posts[0]
-		fmt.Println("Article:", post.Number)
-		fmt.Println("WIP:", post.Wip)
-		fmt.Println("Detail:")
-		fmt.Println(post.BodyMd)
+		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
+		if err != nil {
+			log.Fatalf("update error: %v", err)
+		}
+	} else {
+		fmt.Println("No article exists. Create a new article from the template.")
+
+		category := "dairy/25/07/12"
+		name := "dairy"
+		template := "Templates/dairy/25/07/12/dairy"
+
+		err := creaatePostFromTemplate(team, token, category, name, template)
+		if err != nil {
+			log.Fatalf("Error creating from template: %v", err)
+		}
 	}
 }
