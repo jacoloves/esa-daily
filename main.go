@@ -113,16 +113,24 @@ func main() {
 		log.Fatal("API token or team name has not been set.")
 	}
 
-	fullName := "dairy/25/07/12/dairy"
+	now := time.Now()
+	year := now.Format("06")
+	month := now.Format("01")
+	day := now.Format("02")
+
+	category := fmt.Sprintf("dairy/%s/%s/%s", year, month, day)
+	name := "dairy"
+	fullName := fmt.Sprintf("%s/%s", category, name)
+	template := fmt.Sprintf("Templates/%s/%s", category, name)
+
+	timestamp := now.Format("15:04")
+	message := "I will wirte some Go code"
+	newEntry := fmt.Sprintf("%s %s", timestamp, message)
 
 	postResp, err := getPostByFullName(team, token, fullName)
 	if err != nil {
 		log.Fatalf("Failed to retrieve article: %v", err)
 	}
-
-	now := time.Now().Format("15:04")
-	message := "I will wirte some Go code"
-	newEntry := fmt.Sprintf("%s %s", now, message)
 
 	if len(postResp.Posts) > 0 {
 		post := postResp.Posts[0]
@@ -133,13 +141,19 @@ func main() {
 	} else {
 		fmt.Println("No article exists. Create a new article from the template.")
 
-		category := "dairy/25/07/12"
-		name := "dairy"
-		template := "Templates/dairy/25/07/12/dairy"
-
 		err := creaatePostFromTemplate(team, token, category, name, template)
 		if err != nil {
 			log.Fatalf("Error creating from template: %v", err)
+		}
+
+		postResp, err := getPostByFullName(team, token, fullName)
+		if err != nil || len(postResp.Posts) == 0 {
+			log.Fatalf("Filed to retrieve newly created post")
+		}
+		post := postResp.Posts[0]
+		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
+		if err != nil {
+			log.Fatalf("Update after create error: %v", err)
 		}
 	}
 }
