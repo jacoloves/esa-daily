@@ -102,6 +102,54 @@ func creaatePostFromTemplate(team, token, category, name, templateFullName strin
 	return nil
 }
 
+func handlePost(team, token, message string) error {
+	now := time.Now()
+	year := now.Format("06")
+	month := now.Format("01")
+	day := now.Format("02")
+
+	category := fmt.Sprintf("dairy/%s/%s/%s", year, month, day)
+	name := "diary"
+	fullName := fmt.Sprintf("%s/%s", category, name)
+	template := fmt.Sprintf("Templates/%s/%s", category, name)
+
+	timestamp := now.Format("15:04")
+	newEntry := fmt.Sprintf("%s %s", timestamp, message)
+
+	postResp, err := getPostByFullName(team, token, fullName)
+	if err != nil {
+		return fmt.Errorf("failed to retrieve article: %v", err)
+	}
+
+	if len(postResp.Posts) > 0 {
+		post := postResp.Posts[0]
+		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
+		if err != nil {
+			return fmt.Errorf("update error: %v", err)
+		}
+	} else {
+		fmt.Println("No article exists. Create a new article from the template.")
+
+		err := createPostFromTemplate(team, token, category, name, template)
+		if err != nil {
+			return fmt.Errorf("error creating from template: %v", err)
+		}
+
+		postResp, err := getPostByFullName(team, token, fullName)
+		if err != nil || len(postResp.Posts) == 0 {
+			return fmt.Errorf("failed to retrieve newly created post")
+		}
+
+		post := postResp.Posts[0]
+		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
+		if err != nil {
+			return fmt.Errorf("update after create error: %v", err)
+		}
+	}
+
+	return nil
+}
+
 func interactiveCLI(team, token string) {
 	reader := bufio.NewReader(os.Stdin)
 
