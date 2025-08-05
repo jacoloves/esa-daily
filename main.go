@@ -43,10 +43,10 @@ func getPostByFullName(team, token, fullName string) (*EsaResponse, error) {
 	return resp.Result().(*EsaResponse), nil
 }
 
-func updatePost(team, token string, number int, name, exisitingBody, newEntry string) error {
+func updatePost(team, token string, number int, name, existingBody, newEntry string) error {
 	client := resty.New()
 
-	updatedBody := exisitingBody + "\n" + newEntry
+	updatedBody := existingBody + "\n" + newEntry
 
 	reqBody := map[string]interface{}{
 		"post": map[string]interface{}{
@@ -58,7 +58,7 @@ func updatePost(team, token string, number int, name, exisitingBody, newEntry st
 
 	resp, err := client.R().
 		SetHeader("Authorization", "Bearer "+token).
-		SetHeader("Congent-Type", "application/json").
+		SetHeader("Content-Type", "application/json").
 		SetBody(reqBody).
 		Put(fmt.Sprintf("https://api.esa.io/v1/teams/%s/posts/%d", team, number))
 	if err != nil {
@@ -73,7 +73,7 @@ func updatePost(team, token string, number int, name, exisitingBody, newEntry st
 	return nil
 }
 
-func creaatePostFromTemplate(team, token, category, name, templateFullName string) error {
+func createPostFromTemplate(team, token, category, name, templateFullName string) error {
 	client := resty.New()
 
 	reqBody := map[string]interface{}{
@@ -109,7 +109,7 @@ func handlePost(team, token, message string) error {
 	day := now.Format("02")
 
 	category := fmt.Sprintf("dairy/%s/%s/%s", year, month, day)
-	name := "diary"
+	name := "dairy"
 	fullName := fmt.Sprintf("%s/%s", category, name)
 	template := fmt.Sprintf("Templates/%s/%s", category, name)
 
@@ -195,47 +195,5 @@ func main() {
 		log.Fatal("API token or team name has not been set.")
 	}
 
-	now := time.Now()
-	year := now.Format("06")
-	month := now.Format("01")
-	day := now.Format("02")
-
-	category := fmt.Sprintf("dairy/%s/%s/%s", year, month, day)
-	name := "dairy"
-	fullName := fmt.Sprintf("%s/%s", category, name)
-	template := fmt.Sprintf("Templates/%s/%s", category, name)
-
-	timestamp := now.Format("15:04")
-	message := "I will wirte some Go code"
-	newEntry := fmt.Sprintf("%s %s", timestamp, message)
-
-	postResp, err := getPostByFullName(team, token, fullName)
-	if err != nil {
-		log.Fatalf("Failed to retrieve article: %v", err)
-	}
-
-	if len(postResp.Posts) > 0 {
-		post := postResp.Posts[0]
-		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
-		if err != nil {
-			log.Fatalf("update error: %v", err)
-		}
-	} else {
-		fmt.Println("No article exists. Create a new article from the template.")
-
-		err := creaatePostFromTemplate(team, token, category, name, template)
-		if err != nil {
-			log.Fatalf("Error creating from template: %v", err)
-		}
-
-		postResp, err := getPostByFullName(team, token, fullName)
-		if err != nil || len(postResp.Posts) == 0 {
-			log.Fatalf("Failed to retrieve newly created post")
-		}
-		post := postResp.Posts[0]
-		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
-		if err != nil {
-			log.Fatalf("Update after create error: %v", err)
-		}
-	}
+	interactiveCLI(team, token)
 }
