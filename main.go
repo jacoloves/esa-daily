@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/go-resty/resty/v2"
@@ -100,6 +102,38 @@ func creaatePostFromTemplate(team, token, category, name, templateFullName strin
 	return nil
 }
 
+func interactiveCLI(team, token string) {
+	reader := bufio.NewReader(os.Stdin)
+
+	for {
+		fmt.Print("📤 投稿しますか？（yes/no）: ")
+		input, _ := reader.ReadString('\n')
+		input = strings.TrimSpace(strings.ToLower(input))
+
+		if input == "yes" || input == "y" {
+			fmt.Print("📝 入力してください: ")
+			message, _ := reader.ReadString(('\n'))
+			message = strings.TrimSpace(message)
+
+			if message == "" {
+				fmt.Println("   空の投稿はスキップされました")
+			}
+
+			err := handlePost(team, token, message)
+			if err != nil {
+				fmt.Printf("❌ 投稿に失敗しました： %v\n", err)
+			} else {
+				fmt.Println("✅ 投稿が完了しました！")
+			}
+		} else if input == "no" || input == "n" {
+			fmt.Println("👋 またね！")
+			break
+		} else {
+			fmt.Println("❓ yes か no で答えてください")
+		}
+	}
+}
+
 func main() {
 	err := godotenv.Load()
 	if err != nil {
@@ -148,7 +182,7 @@ func main() {
 
 		postResp, err := getPostByFullName(team, token, fullName)
 		if err != nil || len(postResp.Posts) == 0 {
-			log.Fatalf("Filed to retrieve newly created post")
+			log.Fatalf("Failed to retrieve newly created post")
 		}
 		post := postResp.Posts[0]
 		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
