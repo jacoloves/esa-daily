@@ -135,10 +135,12 @@ func handlePost(team, token, message string) error {
 			return fmt.Errorf("error creating from template: %v", err)
 		}
 
-		postResp, err := getPostByFullName(team, token, fullName)
-		if err != nil || len(postResp.Posts) == 0 {
-			return fmt.Errorf("failed to retrieve newly created post")
-		}
+		/*
+			postResp, err := getPostByFullName(team, token, fullName)
+			if err != nil || len(postResp.Posts) == 0 {
+				return fmt.Errorf("failed to retrieve newly created post")
+			}
+		*/
 
 		post := postResp.Posts[0]
 		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
@@ -153,31 +155,30 @@ func handlePost(team, token, message string) error {
 func interactiveCLI(team, token string) {
 	reader := bufio.NewReader(os.Stdin)
 
+	fmt.Println("🦆 Esa Diary CLIへようこそ！")
+	fmt.Println("今日の呟きに投稿できます。")
+	fmt.Println("メッセージを入力してEnterで投稿、'exit' または 'quit'で終了します。")
+	fmt.Println("")
+
 	for {
-		fmt.Print("📤 投稿しますか？（yes/no）: ")
-		input, _ := reader.ReadString('\n')
-		input = strings.TrimSpace(strings.ToLower(input))
+		fmt.Print("📝 > ")
+		message, _ := reader.ReadString(('\n'))
+		message = strings.TrimSpace(message)
 
-		if input == "yes" || input == "y" {
-			fmt.Print("📝 入力してください: ")
-			message, _ := reader.ReadString(('\n'))
-			message = strings.TrimSpace(message)
-
-			if message == "" {
-				fmt.Println("   空の投稿はスキップされました")
-			}
-
-			err := handlePost(team, token, message)
-			if err != nil {
-				fmt.Printf("❌ 投稿に失敗しました： %v\n", err)
-			} else {
-				fmt.Println("✅ 投稿が完了しました！")
-			}
-		} else if input == "no" || input == "n" {
+		if message == "exit" || message == "quit" || message == "q" {
 			fmt.Println("👋 またね！")
 			break
+		}
+
+		if message == "" {
+			continue
+		}
+
+		err := handlePost(team, token, message)
+		if err != nil {
+			fmt.Printf("❌ 投稿に失敗しました： %v\n", err)
 		} else {
-			fmt.Println("❓ yes か no で答えてください")
+			fmt.Println("✅ 投稿が完了しました！")
 		}
 	}
 }
