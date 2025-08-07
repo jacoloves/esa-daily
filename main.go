@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/textinput"
+	"github.com/charmbracelet/lipgloss"
 	"github.com/go-resty/resty/v2"
 	"github.com/joho/godotenv"
 )
@@ -102,6 +104,53 @@ func createPostFromTemplate(team, token, category, name, templateFullName string
 	return nil
 }
 
+// Bubble Tea model and message
+type model struct {
+	textInput textinput.Model
+	team      string
+	token     string
+	messages  []string
+	err       error
+	quitting  bool
+}
+
+type postResultMsg struct {
+	success bool
+	err     error
+	message string
+}
+
+// style define
+var (
+	titleStyle = lipgloss.NewStyle().
+			Bold(true).
+			Foreground(lipgloss.Color("#7D56F4")).
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(lipgloss.Color("#7D56F4")).
+			Padding(0, 1)
+
+	boxStyle = lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#874BFD")).
+			Padding(1, 2).
+			Width(80)
+
+	promptStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7D56F4")).
+			Bold(true)
+
+	successStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#04B575")).
+			Bold(true)
+
+	errorStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#FF5F87")).
+			Bold(true)
+
+	helpStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#626262"))
+)
+
 func handlePost(team, token, message string) error {
 	now := time.Now()
 	year := now.Format("06")
@@ -135,12 +184,10 @@ func handlePost(team, token, message string) error {
 			return fmt.Errorf("error creating from template: %v", err)
 		}
 
-		/*
-			postResp, err := getPostByFullName(team, token, fullName)
-			if err != nil || len(postResp.Posts) == 0 {
-				return fmt.Errorf("failed to retrieve newly created post")
-			}
-		*/
+		postResp, err := getPostByFullName(team, token, fullName)
+		if err != nil || len(postResp.Posts) == 0 {
+			return fmt.Errorf("failed to retrieve newly created post")
+		}
 
 		post := postResp.Posts[0]
 		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
