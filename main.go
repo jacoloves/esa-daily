@@ -1,7 +1,6 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"log"
 	"os"
@@ -9,6 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/bubbles/textinput"
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/go-resty/resty/v2"
 	"github.com/joho/godotenv"
@@ -100,7 +100,6 @@ func createPostFromTemplate(team, token, category, name, templateFullName string
 		return fmt.Errorf("Failed to create article: %s", resp.Status())
 	}
 
-	fmt.Println("Created an article from a template. ✅")
 	return nil
 }
 
@@ -110,7 +109,6 @@ type model struct {
 	team      string
 	token     string
 	messages  []string
-	err       error
 	quitting  bool
 }
 
@@ -150,6 +148,104 @@ var (
 	helpStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#626262"))
 )
+
+func initialModel(team, token string) model {
+	ti := textinput.New()
+	ti.Placeholder = "メッセージを入力してください..."
+	ti.Focus()
+	ti.CharLimit = 500
+	ti.Width = 70
+
+	return model{
+		textInput: ti,
+		team:      team,
+		token:     token,
+		messages:  []string{},
+	}
+}
+
+func (m model) Init() tea.Cmd {
+	return textinput.Blink
+}
+
+func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	switch msg := msg.(type) {
+	case tea.KeyMsg:
+		switch msg.Type {
+		case tea.KeyCtrlC, tea.KeyEsc:
+			m.quitting = true
+			return m, tea.Quit
+		case tea.KeyEnter:
+			value := strings.TrimSpace(m.textInput.Value())
+
+			if strings.ToLower(value) == "exit" || strings.ToLower(value) == "quit" || strings.ToLower(value) == "q" {
+				m.quitting = true
+				return m, tea.Quit
+			}
+
+			if value != "" {
+				m.textInput.SetValue("")
+				return m, m.postMessage(value)
+			}
+		}
+
+	case postResultMsg:
+		if msg.success {
+			m.messages = append(m.messages, fmt.Sprintf("✅ 投稿完了: %s", msg.message))
+		} else {
+			m.messages = append(m.messages, fmt.Sprintf("❌ エラー: %v", msg.err))
+		}
+
+		if len(m.messages) > 10 {
+			m.messages = m.messages[len(m.messages)-10:]
+		}
+	}
+
+	m.textInput, cmd = m.textInput.Update(msg)
+	return m, cmd
+}
+
+func (m model) postMessage(message string) tea.Cmd {
+	return func() tea.Msg {
+		err := handlePost(m.team, m.token, message)
+		return postResultMsg{
+			success: err == nil,
+			err:     err,
+			message: message,
+		}
+	}
+}
+
+func (m model) View() string {
+	if m.quitting {
+		return promptStyle.Render("👋 またね！ \n")
+	}
+
+	title := titleStyle.Render("🔥 Esa Diary CLI")
+
+	var history strings.Builder
+	if len(m.messages) > 0 {
+		history.WriteString("📝 最近の投稿:\n")
+		for _, msg := range m.messages {
+			if strings.Contains(msg, "✅") {
+				history.WriteString(successStyle.Render(msg) + "\n")
+			} else {
+				history.WriteString(errorStyle.Render(msg) + "\n")
+			}
+		}
+		history.WriteString("\n")
+	}
+
+	prompt := promptStyle.Render("📝 メッセージ: ") + m.textInput.View()
+
+	help := helpStyle.Render("Enter: 投稿 | Ctrl+C/Esc: 終了 | exit/quit/q: 終了")
+
+	content := fmt.Sprintf("%s\n\n%s%s\n%s", title, history.String(), prompt, help)
+
+	return boxStyle.Render(content) + "\n"
+}
 
 func handlePost(team, token, message string) error {
 	now := time.Now()
@@ -199,6 +295,7 @@ func handlePost(team, token, message string) error {
 	return nil
 }
 
+/*
 func interactiveCLI(team, token string) {
 	reader := bufio.NewReader(os.Stdin)
 
@@ -229,6 +326,7 @@ func interactiveCLI(team, token string) {
 		}
 	}
 }
+*/
 
 func main() {
 	err := godotenv.Load()
@@ -243,5 +341,9 @@ func main() {
 		log.Fatal("API token or team name has not been set.")
 	}
 
-	interactiveCLI(team, token)
+	p := tea.NewProgram(initialModel(team, token))
+	if _, err := p.Run(); err != nil {
+		fmt.Printf("エラーが発生しました: %v", err)
+		os.Exit(1)
+	}
 }
