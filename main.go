@@ -71,7 +71,6 @@ func updatePost(team, token string, number int, name, existingBody, newEntry str
 		return fmt.Errorf("Article update failed", resp.Status())
 	}
 
-	fmt.Println("Added to the article. ✅")
 	return nil
 }
 
@@ -198,8 +197,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.messages = append(m.messages, fmt.Sprintf("❌ エラー: %v", msg.err))
 		}
 
-		if len(m.messages) > 10 {
-			m.messages = m.messages[len(m.messages)-10:]
+		if len(m.messages) > 5 {
+			m.messages = m.messages[len(m.messages)-5:]
 		}
 	}
 
@@ -228,7 +227,14 @@ func (m model) View() string {
 	var history strings.Builder
 	if len(m.messages) > 0 {
 		history.WriteString("📝 最近の投稿:\n")
-		for _, msg := range m.messages {
+
+		start := 0
+		if len(m.messages) > 5 {
+			start = len(m.messages) - 5
+		}
+
+		for i := start; i < len(m.messages); i++ {
+			msg := m.messages[i]
 			if strings.Contains(msg, "✅") {
 				history.WriteString(successStyle.Render(msg) + "\n")
 			} else {
@@ -239,12 +245,11 @@ func (m model) View() string {
 	}
 
 	prompt := promptStyle.Render("📝 メッセージ: ") + m.textInput.View()
-
 	help := helpStyle.Render("Enter: 投稿 | Ctrl+C/Esc: 終了 | exit/quit/q: 終了")
 
 	content := fmt.Sprintf("%s\n\n%s%s\n%s", title, history.String(), prompt, help)
 
-	return boxStyle.Render(content) + "\n"
+	return boxStyle.Render(content)
 }
 
 func handlePost(team, token, message string) error {
@@ -273,19 +278,35 @@ func handlePost(team, token, message string) error {
 			return fmt.Errorf("update error: %v", err)
 		}
 	} else {
-		fmt.Println("No article exists. Create a new article from the template.")
-
 		err := createPostFromTemplate(team, token, category, name, template)
 		if err != nil {
 			return fmt.Errorf("error creating from template: %v", err)
 		}
 
-		postResp, err := getPostByFullName(team, token, fullName)
-		if err != nil || len(postResp.Posts) == 0 {
-			return fmt.Errorf("failed to retrieve newly created post")
+		time.Sleep(2 * time.Second)
+
+		var post struct {
+			Number int
+			Name   string
+			BodyMd string
 		}
 
-		post := postResp.Posts[0]
+		for i := 0; i < 3; i++ {
+			postResp, err := getPostByFullName(team, token, fullName)
+			if err == nil && len(postResp.Posts) > 0 {
+				post.Number = postResp.Posts[0].Number
+				post.Name = postResp.Posts[0].Name
+				post.BodyMd = postResp.Posts[0].BodyMd
+				break
+			}
+
+			if i < 2 {
+				time.Sleep(1 * time.Second)
+			} else {
+				return fmt.Errorf("failed to retrieve newly created post after %d attempts", i+1)
+			}
+		}
+
 		err = updatePost(team, token, post.Number, post.Name, post.BodyMd, newEntry)
 		if err != nil {
 			return fmt.Errorf("update after create error: %v", err)
@@ -294,39 +315,6 @@ func handlePost(team, token, message string) error {
 
 	return nil
 }
-
-/*
-func interactiveCLI(team, token string) {
-	reader := bufio.NewReader(os.Stdin)
-
-	fmt.Println("🦆 Esa Diary CLIへようこそ！")
-	fmt.Println("今日の呟きに投稿できます。")
-	fmt.Println("メッセージを入力してEnterで投稿、'exit' または 'quit'で終了します。")
-	fmt.Println("")
-
-	for {
-		fmt.Print("📝 > ")
-		message, _ := reader.ReadString(('\n'))
-		message = strings.TrimSpace(message)
-
-		if message == "exit" || message == "quit" || message == "q" {
-			fmt.Println("👋 またね！")
-			break
-		}
-
-		if message == "" {
-			continue
-		}
-
-		err := handlePost(team, token, message)
-		if err != nil {
-			fmt.Printf("❌ 投稿に失敗しました： %v\n", err)
-		} else {
-			fmt.Println("✅ 投稿が完了しました！")
-		}
-	}
-}
-*/
 
 func main() {
 	err := godotenv.Load()
@@ -341,7 +329,12 @@ func main() {
 		log.Fatal("API token or team name has not been set.")
 	}
 
-	p := tea.NewProgram(initialModel(team, token))
+	p := tea.NewProgram(
+		initialModel(team, token),
+		tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
+	)
+
 	if _, err := p.Run(); err != nil {
 		fmt.Printf("エラーが発生しました: %v", err)
 		os.Exit(1)
